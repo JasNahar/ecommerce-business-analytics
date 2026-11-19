@@ -1,48 +1,209 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
-type Trace = { agent: string; status: "completed" | "attention" | "blocked"; summary: string };
+type View = "Command center" | "Agent workspace" | "Machines" | "Repair memory" | "Spare parts";
+
+type Machine = {
+  id: number;
+  name: string;
+  location: string;
+  status: "Stable" | "Needs review" | "Offline";
+};
+
 type RunResult = {
   run_id: string;
-  machine: { name: string; type?: string; confidence: number };
+  machine: { name: string; confidence: number };
   diagnosis: { hypotheses: { cause: string; confidence: number }[]; assessment: string };
   parts: { original: string; substitute: string; confidence: number }[];
   safety: { risk: string; required_controls: string[]; assessment: string };
-  curation: { draft_title: string; draft_note: string; requires_human_review: boolean };
-  traces: Trace[];
-  approved: boolean;
+  traces: { agent: string; status: "completed" | "attention" | "blocked"; summary: string }[];
 };
 
-const seedMachines = [
-  { id: 1, name: "Sulzer G6300 loom", location: "Line 4 · Floor 2", status: "Stable" },
-  { id: 2, name: "Lakshmi Rieter card", location: "Line 1 · Floor 1", status: "Needs review" },
-  { id: 3, name: "ABB drive cabinet", location: "Dyeing · Bay 3", status: "Stable" },
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+const initialMachines: Machine[] = [
+  { id: 1, name: "Sulzer G6300 loom", location: "Weaving · Line 4", status: "Stable" },
+  { id: 2, name: "Lakshmi Rieter card", location: "Carding · Line 1", status: "Needs review" },
+  { id: 3, name: "ABB ACS355 drive", location: "Dyeing · Bay 3", status: "Stable" },
 ];
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-const nav = ["Overview", "Agent workspace", "Machines", "Repair memory", "Spare parts"];
+const nav: { label: View; icon: string }[] = [
+  { label: "Command center", icon: "grid" },
+  { label: "Agent workspace", icon: "spark" },
+  { label: "Machines", icon: "machine" },
+  { label: "Repair memory", icon: "memory" },
+  { label: "Spare parts", icon: "parts" },
+];
+
+function Icon({ name }: { name: string }) {
+  const paths: Record<string, React.ReactNode> = {
+    grid: <><rect x="3" y="3" width="7" height="7" rx="2" /><rect x="14" y="3" width="7" height="7" rx="2" /><rect x="3" y="14" width="7" height="7" rx="2" /><rect x="14" y="14" width="7" height="7" rx="2" /></>,
+    spark: <><path d="M12 3l1.7 4.3L18 9l-4.3 1.7L12 15l-1.7-4.3L6 9l4.3-1.7L12 3z" /><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z" /></>,
+    machine: <><rect x="3" y="7" width="18" height="13" rx="3" /><path d="M8 7V4h8v3M7 12h10M7 16h10" /></>,
+    memory: <><path d="M4 5h16v14H4z" /><path d="M8 9h8M8 13h5M8 17h7" /></>,
+    parts: <><circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M19.1 4.9l-2.8 2.8M7.7 16.3l-2.8 2.8" /></>,
+    search: <><circle cx="11" cy="11" r="6" /><path d="M16 16l4 4" /></>,
+    bell: <><path d="M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" /><path d="M10 21h4" /></>,
+    plus: <><path d="M12 5v14M5 12h14" /></>,
+    arrow: <><path d="M5 12h14M13 6l6 6-6 6" /></>,
+  };
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+}
 
 export default function Home() {
-  const [active, setActive] = useState("Overview");
-  const [machines, setMachines] = useState(seedMachines);
-  const [text, setText] = useState("The Sulzer loom has a loud bearing noise and stopped after a high-temperature alarm.");
+  const [view, setView] = useState<View>("Command center");
+  const [machines, setMachines] = useState(initialMachines);
+  const [health, setHealth] = useState("checking");
+
+  useEffect(() => {
+    fetch(`${API}/api/health`)
+      .then((response) => response.json())
+      .then((data) => setHealth(data.status === "ok" ? "connected" : "offline"))
+      .catch(() => setHealth("offline"));
+    fetch(`${API}/api/machines`)
+      .then((response) => response.json())
+      .then((data) => Array.isArray(data) && setMachines(data))
+      .catch(() => {});
+  }, []);
+
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <button className="brand" onClick={() => setView("Command center")} aria-label="Open command center">
+          <span className="brand-mark"><Icon name="spark" /></span>
+          <span>
+            <strong>MachineMemory</strong>
+            <small>Industrial intelligence</small>
+          </span>
+        </button>
+
+        <nav className="side-nav" aria-label="Primary navigation">
+          {nav.map((item) => (
+            <button key={item.label} className={view === item.label ? "nav-item active" : "nav-item"} onClick={() => setView(item.label)}>
+              <span className="nav-icon"><Icon name={item.icon} /></span>
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="side-status">
+          <div className="status-heading">
+            <span className={health === "connected" ? "status-dot online" : "status-dot"} />
+            <span>Local AI status</span>
+          </div>
+          <strong>{health === "connected" ? "Ollama connected" : health === "checking" ? "Checking services" : "Backend offline"}</strong>
+          <small>SQLite · Local inference</small>
+        </div>
+      </aside>
+
+      <main className="main">
+        <header className="topbar">
+          <div>
+            <p className="eyebrow">Wednesday, 19 November</p>
+            <h1>{view}</h1>
+          </div>
+          <div className="top-actions">
+            <button className="icon-button" aria-label="Search"><Icon name="search" /></button>
+            <button className="icon-button notification" aria-label="Notifications"><Icon name="bell" /><span /></button>
+            <button className="profile" aria-label="Open profile"><span>MA</span><div><strong>Meena Agarwal</strong><small>Maintenance lead</small></div></button>
+          </div>
+        </header>
+
+        <div className="content">
+          {view === "Command center" && <CommandCenter machines={machines} openWorkspace={() => setView("Agent workspace")} openMachines={() => setView("Machines")} />}
+          {view === "Agent workspace" && <AgentWorkspace />}
+          {view === "Machines" && <MachinesView machines={machines} setMachines={setMachines} />}
+          {view === "Repair memory" && <RepairMemory />}
+          {view === "Spare parts" && <SpareParts />}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function CommandCenter({ machines, openWorkspace, openMachines }: { machines: Machine[]; openWorkspace: () => void; openMachines: () => void }) {
+  return (
+    <>
+      <section className="page-heading">
+        <div>
+          <span className="kicker">Factory command center</span>
+          <h2>Keep the line moving.</h2>
+          <p>One operational view for technician knowledge, machine health, and spare-part decisions.</p>
+        </div>
+        <button className="primary-button" onClick={openWorkspace}><Icon name="spark" /> Start diagnosis</button>
+      </section>
+
+      <section className="metric-grid">
+        <article className="metric-card">
+          <div className="metric-icon green"><Icon name="machine" /></div>
+          <div><strong>{machines.length}</strong><span>Machines tracked</span><small><b>2</b> need attention</small></div>
+        </article>
+        <article className="metric-card">
+          <div className="metric-icon blue"><Icon name="memory" /></div>
+          <div><strong>126</strong><span>Repair memories</span><small><b>+8</b> this month</small></div>
+        </article>
+        <article className="metric-card">
+          <div className="metric-icon amber"><Icon name="parts" /></div>
+          <div><strong>34</strong><span>Parts identified</span><small><b>91%</b> average match</small></div>
+        </article>
+      </section>
+
+      <section className="dashboard-grid">
+        <article className="panel machine-panel">
+          <div className="panel-heading">
+            <div><span className="panel-kicker">Fleet health</span><h3>Machine overview</h3></div>
+            <button className="text-button" onClick={openMachines}>View all <Icon name="arrow" /></button>
+          </div>
+          <div className="machine-list">
+            {machines.map((machine) => (
+              <div className="machine-row" key={machine.id}>
+                <div className="machine-avatar"><Icon name="machine" /></div>
+                <div className="machine-name"><strong>{machine.name}</strong><span>{machine.location}</span></div>
+                <span className={`health-pill ${machine.status === "Stable" ? "stable" : "review"}`}><i />{machine.status}</span>
+                <button className="row-action" aria-label={`Open ${machine.name}`}>•••</button>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="ask-card">
+          <div className="ask-orb"><Icon name="spark" /></div>
+          <span>Ask the memory</span>
+          <h3>What do you need to fix?</h3>
+          <p>Describe a symptom, upload a machine note, or search your team&apos;s repair history.</p>
+          <button onClick={openWorkspace}>Open diagnosis workspace <Icon name="arrow" /></button>
+        </article>
+      </section>
+
+      <section className="panel activity-panel">
+        <div className="panel-heading">
+          <div><span className="panel-kicker">Recent activity</span><h3>Knowledge timeline</h3></div>
+          <button className="text-button">View history <Icon name="arrow" /></button>
+        </div>
+        <div className="activity-grid">
+          <Activity initials="RK" title="Bearing replacement procedure" meta="Ramesh Kumar · 18 min ago" tone="orange" />
+          <Activity initials="AI" title="SKF 6205 substitute candidates" meta="Parts agent · 42 min ago" tone="blue" />
+          <Activity initials="MA" title="Maintenance memory approved" meta="Meena Agarwal · Yesterday" tone="violet" />
+        </div>
+      </section>
+    </>
+  );
+}
+
+function Activity({ initials, title, meta, tone }: { initials: string; title: string; meta: string; tone: string }) {
+  return <div className="activity-item"><span className={`activity-avatar ${tone}`}>{initials}</span><div><strong>{title}</strong><small>{meta}</small></div></div>;
+}
+
+function AgentWorkspace() {
+  const [text, setText] = useState("The Sulzer loom bearing is noisy and hot after 30 minutes of operation.");
   const [machineName, setMachineName] = useState("Sulzer G6300 loom");
   const [running, setRunning] = useState(false);
   const [run, setRun] = useState<RunResult | null>(null);
   const [approved, setApproved] = useState(false);
-  const [memoryText, setMemoryText] = useState("");
-  const [technician, setTechnician] = useState("");
-  const [savedNotice, setSavedNotice] = useState("");
-  const [health, setHealth] = useState("checking");
 
-  useEffect(() => {
-    fetch(`${API}/api/health`).then((r) => r.json()).then((d) => setHealth(d.status)).catch(() => setHealth("offline"));
-    fetch(`${API}/api/machines`).then((r) => r.json()).then(setMachines).catch(() => {});
-  }, []);
-
-  async function runAgents(e: FormEvent) {
-    e.preventDefault();
+  async function runAgents(event: FormEvent) {
+    event.preventDefault();
     setRunning(true);
     setApproved(false);
     try {
@@ -56,172 +217,206 @@ export default function Home() {
     } catch {
       setRun({
         run_id: "offline-preview",
-        machine: { name: machineName || "Sulzer G6300 loom", confidence: 72 },
-        diagnosis: { hypotheses: [{ cause: "Backend unavailable or Ollama not connected", confidence: 20 }], assessment: "Start the FastAPI backend and Ollama to run the local agents." },
-        parts: [{ original: "SKF 6205", substitute: "NSK 6205-2Z", confidence: 91 }],
+        machine: { name: machineName, confidence: 72 },
+        diagnosis: { hypotheses: [{ cause: "Backend unavailable", confidence: 20 }], assessment: "Start Ollama and the FastAPI backend to run the specialist agents." },
+        parts: [{ original: "Not identified", substitute: "Start backend for analysis", confidence: 20 }],
         safety: { risk: "High", required_controls: ["Lockout/tagout", "Verify isolation", "Follow OEM procedure"], assessment: "Human safety review required." },
-        curation: { draft_title: "Maintenance observation draft", draft_note: text, requires_human_review: true },
         traces: [{ agent: "Manager / Orchestrator", status: "blocked", summary: "FastAPI backend is unreachable" }],
-        approved: false,
       });
     } finally {
       setRunning(false);
     }
   }
 
-  async function approveRun() {
+  async function approve() {
     if (!run) return;
     const response = await fetch(`${API}/api/agent-runs/${run.run_id}/approve`, { method: "POST" });
     setApproved(response.ok);
   }
 
-  async function saveMemory(e: FormEvent) {
-    e.preventDefault();
-    if (!memoryText.trim()) return;
+  return (
+    <div className="workspace-layout">
+      <form className="panel intake-panel" onSubmit={runAgents}>
+        <div className="panel-heading">
+          <div><span className="panel-kicker">New investigation</span><h3>Describe the problem</h3></div>
+          <span className="local-badge"><i /> Local Ollama</span>
+        </div>
+        <label>Machine
+          <input value={machineName} onChange={(event) => setMachineName(event.target.value)} placeholder="Machine name or model" />
+        </label>
+        <label>Symptoms or technician notes
+          <textarea value={text} onChange={(event) => setText(event.target.value)} rows={8} placeholder="Describe the fault, observations, and tests…" />
+        </label>
+        <label className="upload-zone">
+          <span className="upload-icon"><Icon name="plus" /></span>
+          <strong>Attach evidence</strong>
+          <small>Manual text, photo note, or operating log</small>
+          <input type="file" accept=".txt,.md,.csv,.log,text/*" onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => setText((current) => `${current}\n\nUploaded ${file.name}: ${String(reader.result).slice(0, 3000)}`);
+            reader.readAsText(file);
+          }} />
+        </label>
+        <button className="run-button" disabled={running || !text.trim()}>
+          <Icon name="spark" /> {running ? "Agents analyzing…" : "Run agent team"}
+        </button>
+      </form>
+
+      <div className="analysis-column">
+        {!run ? (
+          <div className="panel empty-analysis">
+            <div className="empty-orb"><Icon name="spark" /></div>
+            <h3>Ready for an investigation</h3>
+            <p>The manager will route evidence to seven specialist agents.</p>
+            <div className="agent-pipeline">
+              {["Identify", "Memory", "Diagnose", "Parts", "Check", "Safety", "Curate"].map((agent) => <span key={agent}>{agent}</span>)}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="analysis-stats">
+              <article className="stat-card"><span>IDENTIFIED MACHINE</span><strong>{run.machine.name}</strong><small>{run.machine.confidence}% confidence</small></article>
+              <article className={`stat-card ${run.safety.risk === "High" ? "danger" : ""}`}><span>SAFETY REVIEW</span><strong>{run.safety.risk} risk</strong><small>Human review required</small></article>
+            </div>
+            <article className="panel result-panel">
+              <div className="panel-heading"><div><span className="panel-kicker">Manager trace</span><h3>Agent execution</h3></div><span className="run-id">RUN {run.run_id.slice(0, 8).toUpperCase()}</span></div>
+              <div className="trace-list">
+                {run.traces.map((trace) => (
+                  <div className="trace-row" key={trace.agent}>
+                    <span className={`trace-dot ${trace.status}`} />
+                    <div><strong>{trace.agent}</strong><small>{trace.summary}</small></div>
+                    <span className={`trace-status ${trace.status}`}>{trace.status}</span>
+                  </div>
+                ))}
+              </div>
+            </article>
+            <article className="panel result-panel">
+              <div className="panel-heading"><div><span className="panel-kicker">Diagnosis</span><h3>Likely root causes</h3></div></div>
+              <div className="hypothesis-list">
+                {run.diagnosis.hypotheses.map((item) => (
+                  <div className="hypothesis" key={item.cause}>
+                    <div><strong>{item.cause}</strong><span>{item.confidence}%</span></div>
+                    <div className="confidence-bar"><i style={{ width: `${item.confidence}%` }} /></div>
+                  </div>
+                ))}
+              </div>
+            </article>
+            <article className={`approval-card ${approved ? "approved" : ""}`}>
+              <div className="approval-icon">{approved ? "✓" : "!"}</div>
+              <div><strong>{approved ? "Recommendation approved" : "Approval required"}</strong><p>{approved ? "This run is approved for operational review." : "A qualified person must explicitly approve before this recommendation is treated as approved."}</p></div>
+              {!approved && <button onClick={approve}>Approve for this run</button>}
+            </article>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MachinesView({ machines, setMachines }: { machines: Machine[]; setMachines: (machines: Machine[]) => void }) {
+  const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
+
+  async function addMachine(event: FormEvent) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    const payload: Machine = { id: 0, name: name.trim(), location: location.trim() || "Unassigned", status: "Stable" };
+    try {
+      const response = await fetch(`${API}/api/machines`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (response.ok) setMachines([await response.json(), ...machines]);
+    } catch {
+      setMachines([{ ...payload, id: Date.now() }, ...machines]);
+    }
+    setName("");
+    setLocation("");
+  }
+
+  return (
+    <>
+      <section className="page-heading"><div><span className="kicker">Asset register</span><h2>Machines</h2><p>Track critical equipment, locations, and maintenance state.</p></div></section>
+      <form className="panel add-machine-form" onSubmit={addMachine}>
+        <label>Machine name<input value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Sulzer G6300 loom" /></label>
+        <label>Location<input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="e.g. Line 4 · Floor 2" /></label>
+        <button className="primary-button"><Icon name="plus" /> Add machine</button>
+      </form>
+      <section className="machine-card-grid">
+        {machines.map((machine) => (
+          <article className="machine-card" key={machine.id}>
+            <div className="machine-card-top"><span className="machine-card-icon"><Icon name="machine" /></span><span className={`health-pill ${machine.status === "Stable" ? "stable" : "review"}`}><i />{machine.status}</span></div>
+            <h3>{machine.name}</h3><p>{machine.location}</p>
+            <button>Open machine <Icon name="arrow" /></button>
+          </article>
+        ))}
+      </section>
+    </>
+  );
+}
+
+function RepairMemory() {
+  const [technician, setTechnician] = useState("");
+  const [note, setNote] = useState("");
+  const [saved, setSaved] = useState("");
+
+  async function saveMemory(event: FormEvent) {
+    event.preventDefault();
+    if (!note.trim()) return;
     try {
       await fetch(`${API}/api/memories`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ machine_name: machineName, technician, text: memoryText, source: "technician" }),
+        body: JSON.stringify({ technician, text: note, source: "technician" }),
       });
-      setSavedNotice("Memory draft saved for human review");
-      setMemoryText("");
+      setSaved("Memory draft saved for human review.");
     } catch {
-      setSavedNotice("Memory draft saved locally in this session");
-      setMemoryText("");
+      setSaved("Memory draft saved in this local session.");
     }
-  }
-
-  function readUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setText(`${text}\n\nUploaded ${file.name}: ${String(reader.result).slice(0, 3000)}`);
-    reader.readAsText(file);
+    setNote("");
   }
 
   return (
-    <main className="min-h-screen bg-[#f5f7f4] text-slate-950">
-      <aside className="fixed inset-y-0 left-0 hidden w-64 border-r border-slate-200 bg-white px-5 py-6 lg:flex lg:flex-col">
-        <button onClick={() => setActive("Overview")} className="mb-10 flex items-center gap-3 text-left">
-          <div className="grid size-9 place-items-center rounded-xl bg-[#1f5141] text-lg text-white">✦</div>
-          <div><p className="font-semibold tracking-tight">MachineMemory</p><p className="text-xs text-slate-400">Industrial intelligence</p></div>
-        </button>
-        <nav className="space-y-1 text-sm">
-          {nav.map((item, index) => (
-            <button key={item} onClick={() => setActive(item)} className={`w-full rounded-xl px-3 py-3 text-left ${active === item ? "bg-[#e9f2ee] font-medium text-[#1f5141]" : "text-slate-500 hover:bg-slate-50"}`}>
-              <span className="mr-3 inline-block w-4 text-center">{["⌂", "✣", "▦", "◉", "◇"][index]}</span>{item}
-            </button>
-          ))}
-        </nav>
-        <div className="mt-auto rounded-2xl bg-[#f1f5f2] p-4">
-          <p className="text-xs font-semibold text-[#1f5141]">Local AI status</p>
-          <p className="mt-2 text-xs leading-5 text-slate-500"><span className={`mr-2 inline-block size-2 rounded-full ${health === "ok" ? "bg-emerald-500" : "bg-amber-500"}`} />{health === "ok" ? "Ollama backend connected" : "Waiting for local services"}</p>
-        </div>
-      </aside>
-
-      <section className="lg:ml-64">
-        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-5 lg:px-10">
-          <div><p className="text-sm text-slate-400">Wednesday, 19 November 2026</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">{active}</h1></div>
-          <div className="flex items-center gap-3"><span className="hidden rounded-full border border-slate-200 px-3 py-2 text-sm text-slate-500 sm:block">Local mode</span><div className="grid size-9 place-items-center rounded-full bg-[#d9e8df] text-sm font-semibold text-[#1f5141]">MA</div></div>
-        </header>
-
-        <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
-          {active === "Overview" && <Overview setActive={setActive} machines={machines} />}
-          {active === "Agent workspace" && (
-            <AgentWorkspace text={text} setText={setText} machineName={machineName} setMachineName={setMachineName} running={running} run={run} approved={approved} runAgents={runAgents} approveRun={approveRun} readUpload={readUpload} />
-          )}
-          {active === "Machines" && <Machines machines={machines} setMachines={setMachines} />}
-          {active === "Repair memory" && (
-            <MemoryPanel technician={technician} setTechnician={setTechnician} memoryText={memoryText} setMemoryText={setMemoryText} saveMemory={saveMemory} savedNotice={savedNotice} />
-          )}
-          {active === "Spare parts" && <PartsPanel run={run} />}
-        </div>
-      </section>
-    </main>
+    <>
+      <section className="page-heading"><div><span className="kicker">Technician knowledge</span><h2>Repair memory</h2><p>Capture what experienced technicians know before it leaves the floor.</p></div></section>
+      <div className="memory-layout">
+        <form className="panel capture-panel" onSubmit={saveMemory}>
+          <div className="panel-heading"><div><span className="panel-kicker">Knowledge capture</span><h3>Add a repair memory</h3></div></div>
+          <label>Technician name<input value={technician} onChange={(event) => setTechnician(event.target.value)} placeholder="Full name" /></label>
+          <label>Procedure or observation<textarea value={note} onChange={(event) => setNote(event.target.value)} rows={9} placeholder="What failed? What did you test? What repair worked? What should others watch for?" /></label>
+          <button className="run-button"><Icon name="memory" /> Save memory draft</button>
+          {saved && <p className="saved-message">{saved}</p>}
+        </form>
+        <article className="panel curation-panel">
+          <div className="panel-heading"><div><span className="panel-kicker">Curation queue</span><h3>Needs review</h3></div><span className="count-badge">2</span></div>
+          <div className="curation-list">
+            <div className="curation-row"><span className="activity-avatar orange">RK</span><div><strong>Bearing replacement procedure</strong><small>Ramesh Kumar · Awaiting review</small></div><button>Review</button></div>
+            <div className="curation-row"><span className="activity-avatar violet">MA</span><div><strong>Feed chute vibration isolation</strong><small>Meena Agarwal · Approved</small></div><button>View</button></div>
+          </div>
+        </article>
+      </div>
+    </>
   );
 }
 
-function Overview({ setActive, machines }: { setActive: (value: string) => void; machines: typeof seedMachines }) {
-  return <div className="space-y-8">
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-      <div><p className="text-sm font-medium text-[#1f5141]">Factory command center</p><h2 className="mt-1 text-3xl font-semibold tracking-tight">Keep the line moving.</h2><p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">Knowledge, machines, and parts in one local-first maintenance workspace.</p></div>
-      <button onClick={() => setActive("Agent workspace")} className="rounded-xl bg-[#1f5141] px-4 py-3 text-sm font-medium text-white">Open diagnosis workspace →</button>
-    </div>
-    <div className="grid gap-4 md:grid-cols-3">{[["18", "Machines tracked"], ["126", "Repair memories"], ["34", "Parts identified"]].map(([value, label]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-3xl font-semibold text-[#1f5141]">{value}</p><p className="mt-2 text-sm font-medium">{label}</p></div>)}</div>
-    <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6"><h3 className="font-semibold">Machine health</h3><div className="mt-5 space-y-3">{machines.map((machine) => <div key={machine.id} className="flex items-center justify-between rounded-xl bg-[#fafbfa] px-4 py-3"><div><p className="text-sm font-medium">{machine.name}</p><p className="mt-1 text-xs text-slate-400">{machine.location}</p></div><span className={`rounded-full px-2.5 py-1 text-xs ${machine.status === "Stable" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{machine.status}</span></div>)}</div></section>
-      <section className="rounded-2xl bg-[#1f5141] p-6 text-white"><p className="text-xs font-medium uppercase tracking-[0.18em] text-emerald-200">Ask the memory</p><h3 className="mt-3 text-xl font-semibold">What do you need to fix?</h3><p className="mt-2 text-sm leading-6 text-emerald-100">Describe symptoms, paste machine notes, or upload text evidence.</p><button onClick={() => setActive("Agent workspace")} className="mt-6 rounded-xl bg-white px-4 py-3 text-sm font-medium text-[#1f5141]">Start an agent run →</button></section>
-    </div>
-  </div>;
-}
-
-function AgentWorkspace({
-  text, setText, machineName, setMachineName, running, run, approved, runAgents, approveRun, readUpload,
-}: {
-  text: string; setText: (value: string) => void; machineName: string; setMachineName: (value: string) => void;
-  running: boolean; run: RunResult | null; approved: boolean; runAgents: (e: FormEvent) => void;
-  approveRun: () => void; readUpload: (event: ChangeEvent<HTMLInputElement>) => void;
-}) {
-  return <div className="grid gap-6 xl:grid-cols-[1fr_1.25fr]">
-    <form onSubmit={runAgents} className="h-fit rounded-2xl border border-slate-200 bg-white p-6">
-      <div className="flex items-center justify-between"><div><p className="text-xs font-medium uppercase tracking-[0.16em] text-[#1f5141]">Manager orchestrated</p><h2 className="mt-2 text-xl font-semibold">Run diagnosis agents</h2></div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">Local Ollama</span></div>
-      <label className="mt-5 block text-xs font-medium text-slate-600">Machine</label>
-      <input value={machineName} onChange={(e) => setMachineName(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-[#1f5141]" placeholder="Machine name or model" />
-      <label className="mt-4 block text-xs font-medium text-slate-600">Symptom or technician note</label>
-      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={8} className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-3 text-sm leading-6 outline-none focus:border-[#1f5141]" />
-      <label className="mt-4 flex cursor-pointer items-center justify-center rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm text-slate-500 hover:border-[#1f5141]">
-        ↑ Upload a text, manual extract, or photo note
-        <input type="file" accept=".txt,.md,.csv,.log,text/*" onChange={readUpload} className="hidden" />
-      </label>
-      <button disabled={running || !text.trim()} className="mt-4 w-full rounded-xl bg-[#1f5141] px-4 py-3 text-sm font-medium text-white disabled:opacity-50">{running ? "Agents are analyzing…" : "Run agent team"}</button>
-    </form>
-
-    <div className="space-y-4">
-      {!run ? <div className="grid min-h-80 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white text-center"><div><div className="mx-auto grid size-12 place-items-center rounded-full bg-[#edf4f0] text-xl text-[#1f5141]">✣</div><p className="mt-4 font-medium">No agent run yet</p><p className="mt-1 text-sm text-slate-400">The manager will route work to seven specialists.</p></div></div> :
-        <>
-          <div className="grid gap-4 md:grid-cols-2">
-            <section className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-xs font-medium text-slate-400">IDENTIFIED MACHINE</p><p className="mt-2 font-semibold">{run.machine.name}</p><p className="mt-1 text-xs text-slate-500">{run.machine.confidence}% identification confidence</p></section>
-            <section className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-xs font-medium text-slate-400">SAFETY REVIEW</p><p className={`mt-2 font-semibold ${run.safety.risk === "High" ? "text-red-700" : "text-amber-700"}`}>{run.safety.risk} risk</p><p className="mt-1 text-xs text-slate-500">Human approval required</p></section>
+function SpareParts() {
+  const parts = [
+    { original: "SKF 6205", substitute: "NSK 6205-2Z", confidence: 91, status: "Likely compatible" },
+    { original: "SKF 6205", substitute: "FAG 6205-2RS", confidence: 88, status: "Likely compatible" },
+  ];
+  return (
+    <>
+      <section className="page-heading"><div><span className="kicker">Compatibility catalog</span><h2>Spare parts</h2><p>Candidate substitutes with human verification requirements.</p></div></section>
+      <section className="panel parts-table">
+        <div className="parts-head"><span>Original part</span><span>Candidate substitute</span><span>Match</span><span>Status</span></div>
+        {parts.map((part) => (
+          <div className="parts-row" key={part.substitute}>
+            <strong>{part.original}</strong><strong>{part.substitute}</strong>
+            <div className="match-score"><span>{part.confidence}%</span><div><i style={{ width: `${part.confidence}%` }} /></div></div>
+            <span className="health-pill stable"><i />{part.status}</span>
           </div>
-          <section className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Diagnosis hypotheses</h3>{run.diagnosis.hypotheses.map((item) => <div key={item.cause} className="mt-3 rounded-xl bg-[#fafbfa] p-3"><div className="flex justify-between gap-3 text-sm"><span>{item.cause}</span><span className="text-slate-400">{item.confidence}%</span></div></div>)}</section>
-          <section className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="font-semibold">Agent trace</h3><div className="mt-3 space-y-2">{run.traces.map((trace) => <div key={trace.agent} className="flex items-start gap-3 rounded-xl bg-[#fafbfa] px-3 py-2.5"><span className={`mt-1 size-2 rounded-full ${trace.status === "blocked" ? "bg-red-500" : trace.status === "attention" ? "bg-amber-500" : "bg-emerald-500"}`} /><div><p className="text-sm font-medium">{trace.agent}</p><p className="mt-0.5 text-xs text-slate-400">{trace.summary}</p></div></div>)}</div></section>
-          <section className={`rounded-2xl border p-5 ${approved ? "border-emerald-300 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
-            <p className="font-semibold">{approved ? "Recommendation approved" : "Human approval required"}</p><p className="mt-1 text-xs leading-5 text-slate-600">{approved ? "The repair recommendation is now approved for this run." : "No repair recommendation becomes approved until a qualified person explicitly approves it."}</p>
-            {!approved && <button onClick={approveRun} className="mt-3 rounded-lg bg-[#1f5141] px-4 py-2 text-xs font-medium text-white">Approve for this run</button>}
-          </section>
-        </>
-      }
-    </div>
-  </div>;
-}
-
-function Machines({ machines, setMachines }: { machines: typeof seedMachines; setMachines: (value: typeof seedMachines) => void }) {
-  const [name, setName] = useState("");
-  const [location, setLocation] = useState("");
-  async function addMachine(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    try {
-      const response = await fetch(`${API}/api/machines`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, location: location || "Unassigned", status: "Stable" }) });
-      if (response.ok) setMachines([await response.json(), ...machines]);
-    } catch {
-      setMachines([{ id: Date.now(), name, location: location || "Unassigned", status: "Stable" }, ...machines]);
-    }
-    setName(""); setLocation("");
-  }
-  return <div className="space-y-6"><div className="flex items-end justify-between"><div><p className="text-sm font-medium text-[#1f5141]">Asset register</p><h2 className="mt-1 text-3xl font-semibold">Machines</h2></div></div><form onSubmit={addMachine} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-5 sm:grid-cols-[1fr_1fr_auto]"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Machine name" className="rounded-xl border border-slate-200 px-3 py-3 text-sm" /><input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Location" className="rounded-xl border border-slate-200 px-3 py-3 text-sm" /><button className="rounded-xl bg-[#1f5141] px-4 text-sm font-medium text-white">Add machine</button></form><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{machines.map((machine) => <article key={machine.id} className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-start justify-between"><div className="grid size-10 place-items-center rounded-xl bg-[#edf4f0] text-[#1f5141]">▦</div><span className={`rounded-full px-2 py-1 text-xs ${machine.status === "Stable" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{machine.status}</span></div><h3 className="mt-4 font-semibold">{machine.name}</h3><p className="mt-1 text-xs text-slate-400">{machine.location}</p></article>)}</div></div>;
-}
-
-function MemoryPanel({ technician, setTechnician, memoryText, setMemoryText, saveMemory, savedNotice }: { technician: string; setTechnician: (value: string) => void; memoryText: string; setMemoryText: (value: string) => void; saveMemory: (e: FormEvent) => void; savedNotice: string }) {
-  return <div className="grid gap-6 lg:grid-cols-[1fr_1fr]"><form onSubmit={saveMemory} className="rounded-2xl border border-slate-200 bg-white p-6"><p className="text-xs font-medium uppercase tracking-[0.16em] text-[#1f5141]">Technician knowledge capture</p><h2 className="mt-2 text-xl font-semibold">Add repair memory</h2><input value={technician} onChange={(e) => setTechnician(e.target.value)} placeholder="Technician name" className="mt-5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /><textarea value={memoryText} onChange={(e) => setMemoryText(e.target.value)} rows={7} placeholder="Describe the symptom, test, repair, and result…" className="mt-3 w-full resize-none rounded-xl border border-slate-200 px-3 py-3 text-sm leading-6" /><button className="mt-3 rounded-xl bg-[#1f5141] px-4 py-3 text-sm font-medium text-white">Save draft</button>{savedNotice && <p className="mt-3 text-xs font-medium text-emerald-700">{savedNotice}</p>}</form><section className="rounded-2xl border border-slate-200 bg-white p-6"><h2 className="font-semibold">Knowledge curation queue</h2><div className="mt-5 space-y-3"><MemoryCard initials="RK" title="Bearing replacement procedure" detail="Ramesh Kumar · awaiting review" /><MemoryCard initials="MA" title="Feed chute vibration isolate" detail="Meena Agarwal · approved" /></div></section></div>;
-}
-
-function MemoryCard({ initials, title, detail }: { initials: string; title: string; detail: string }) {
-  return <div className="flex items-center gap-3 rounded-xl bg-[#fafbfa] p-3"><div className="grid size-9 place-items-center rounded-full bg-orange-100 text-xs font-semibold text-orange-700">{initials}</div><div><p className="text-sm font-medium">{title}</p><p className="mt-1 text-xs text-slate-400">{detail}</p></div></div>;
-}
-
-function PartsPanel({ run }: { run: RunResult | null }) {
-  const parts = run?.parts || [{ original: "SKF 6205", substitute: "NSK 6205-2Z", confidence: 91 }, { original: "SKF 6205", substitute: "FAG 6205-2RS", confidence: 88 }];
-  return <div className="space-y-6"><div><p className="text-sm font-medium text-[#1f5141]">Compatibility catalog</p><h2 className="mt-1 text-3xl font-semibold">Spare parts</h2></div><section className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="grid grid-cols-[1fr_1fr_120px] border-b border-slate-200 px-5 py-3 text-xs font-medium text-slate-400"><span>Original</span><span>Candidate substitute</span><span>Match</span></div>{parts.map((part) => <div key={part.substitute} className="grid grid-cols-[1fr_1fr_120px] items-center border-b border-slate-100 px-5 py-4 text-sm last:border-0"><span>{part.original}</span><span className="font-medium">{part.substitute}</span><span className="text-[#1f5141]">{part.confidence}%</span></div>)}</section><p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">Compatibility suggestions require verification against bore, width, seal, speed, load, lubrication, and OEM fit.</p></div>;
+        ))}
+      </section>
+      <div className="warning-card"><span>!</span><div><strong>Verify before fitting</strong><p>Check bore, width, seal, clearance, speed, load, lubrication, and OEM fit.</p></div></div>
+    </>
+  );
 }
