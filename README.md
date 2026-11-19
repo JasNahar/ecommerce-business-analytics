@@ -1,334 +1,240 @@
 # MachineMemory AI
 
-MachineMemory AI is a local-first industrial maintenance knowledge system. It combines a Next.js web interface, a FastAPI agent service, specialist AI agents, Ollama, and durable knowledge storage.
+MachineMemory AI is a local-first industrial maintenance knowledge system with a Next.js interface, FastAPI backend, and Ollama inference.
 
-The application does not require OpenAI, Azure OpenAI, or another cloud model provider. All inference is configured through local Ollama.
+Everything runs directly on the same Windows or development machine. The project does not require Docker, containers, cloud model APIs, API keys, or an external database.
 
-## System overview
+## Architecture
 
 ```mermaid
 flowchart LR
-    U[Technician or Maintenance Engineer] -->|Symptom, manual text, or repair note| FE[Next.js Frontend]
-    FE -->|Typed REST requests| API[FastAPI Backend]
-    API --> M[Manager / Agent Router]
+    U[Technician] --> FE[Next.js frontend]
+    FE -->|HTTP JSON| API[FastAPI backend]
+    API --> M[Manager and agent router]
 
-    M --> I[Machine Identification Agent]
-    M --> T[Technician Memory Agent]
-    M --> D[Fault Diagnosis Agent]
-    M --> P[Spare Parts Agent]
-    M --> C[Compatibility Agent]
-    M --> S[Safety Review Agent]
-    M --> K[Knowledge Curation Agent]
+    M --> I[Machine identification]
+    M --> T[Technician memory extraction]
+    M --> D[Fault diagnosis]
+    M --> P[Spare-parts discovery]
+    M --> C[Compatibility checking]
+    M --> S[Safety review]
+    M --> K[Knowledge curation]
 
-    I --> O[Ollama local LLM]
+    I --> O[Local Ollama]
     T --> O
     D --> O
     P --> O
     S --> O
+    K --> O
 
-    API --> DB[(SQLite fallback)]
-    DB -. optional future deployment .-> PG[(PostgreSQL + pgvector)]
-    S --> H{Human approval gate}
-    H -->|Approved| R[Approved repair recommendation]
-    H -->|Rejected or pending| X[Held for review]
+    API --> DB[(Local SQLite database)]
+    S --> H{Human approval}
+    H -->|Approved| R[Approved recommendation]
+    H -->|Pending| X[Held for review]
 ```
 
 ```mermaid
 flowchart TD
-    A[Input received] --> B[Manager validates request]
-    B --> C[Machine identification]
-    C --> D[Memory extraction]
-    D --> E[Fault diagnosis]
-    E --> F[Parts discovery]
-    F --> G[Compatibility review]
-    G --> H[Safety review]
-    H --> I[Knowledge curation draft]
-    I --> J[Agent trace shown in UI]
-    J --> K{Qualified person approves?}
-    K -->|No| L[Recommendation remains unapproved]
-    K -->|Yes| M[Approval recorded]
+    A[Technician enters evidence] --> B[FastAPI receives agent-run request]
+    B --> C[Manager routes specialist work]
+    C --> D[Machine and memory agents]
+    D --> E[Diagnosis and parts agents]
+    E --> F[Compatibility and safety agents]
+    F --> G[Knowledge draft and trace]
+    G --> H{Qualified human approves?}
+    H -->|No| I[No approved repair recommendation]
+    H -->|Yes| J[Approval recorded]
 ```
 
-## Core features
+## Features
 
-- Manager/orchestrator routes each request to specialist agents.
-- Machine identification recognizes loom, carding, and drive equipment patterns.
-- Technician-memory extraction converts free-text observations into reusable notes.
-- Fault diagnosis ranks candidate root causes and evidence.
-- Spare-parts discovery identifies candidates and confidence.
-- Compatibility checking requires dimensional and OEM verification.
-- Safety review blocks approval until a human completes the required controls.
-- Knowledge curation creates a reviewable maintenance-memory draft.
-- Agent traces show routing and status for every run.
-- A human approval endpoint is separate from agent execution.
+- Manager/orchestrator agent
+- Machine identification agent
+- Technician-memory extraction agent
+- Fault diagnosis agent
+- Spare-parts discovery agent
+- Compatibility checking agent
+- Safety review agent
+- Knowledge curation agent
+- Agent trace and status display
+- Machine, repair-memory, and spare-parts panels
+- Text entry and text-file upload
+- Explicit human approval gate
+- Local SQLite persistence
+- Ollama-only inference
 
-## Technology stack
+## Technology
 
-| Component | Technology |
+| Layer | Technology |
 |---|---|
-| Web application | Next.js 15, React 19, TypeScript, Tailwind CSS |
-| API | Python 3.12, FastAPI, Pydantic |
-| Agent orchestration | Python manager/router and specialist agent classes |
-| Local inference | Ollama |
-| Default persistence | SQLite |
-| Optional vector persistence | PostgreSQL 16 with pgvector |
-| Containers | Docker Compose |
+| Frontend | Next.js, React, TypeScript, Tailwind CSS |
+| Backend | Python, FastAPI, Pydantic |
+| Agents | Python router and specialist classes |
+| LLM | Local Ollama |
+| Database | Local SQLite |
 
-## Repository layout
+No Docker, container runtime, cloud LLM, API key, or external database is required.
+
+## Project layout
 
 ```text
-src/app/page.tsx                 Next.js maintenance workspace
-backend/app/main.py              FastAPI routes and API startup
-backend/app/orchestrator.py      Manager and agent routing
-backend/app/agents.py            Specialist agents
-backend/app/ollama.py            Ollama API client
-backend/app/db.py                SQLite connection and schema
-backend/app/schemas.py           Typed API models
-backend/tests/                  Focused backend tests
-docker-compose.yml               Full local stack
-postgres/init.sql                pgvector database initialization
-.env.example                     Environment template
+src/app/page.tsx          Next.js maintenance workspace
+backend/app/main.py       FastAPI API and startup
+backend/app/orchestrator.py
+                          Agent manager/router
+backend/app/agents.py     Specialist agents
+backend/app/ollama.py     Local Ollama HTTP client
+backend/app/db.py         SQLite connection and schema
+backend/app/schemas.py    Typed API models
+backend/tests/            Health and router tests
+.env.example              Local environment template
 ```
 
-## Database and data storage
+## Database storage
 
-### SQLite default
-
-The default configuration is the lightweight SQLite fallback. It requires no external database service.
-
-Local development stores the database at:
+The native SQLite database is stored at:
 
 ```text
 backend/machinememory.db
 ```
 
-The database is initialized automatically when the FastAPI process starts. The schema creates:
+It is created automatically when FastAPI starts. Tables are:
 
 - `machines`
 - `memories`
 - `parts`
 
-Because `DATABASE_URL` is not yet consumed by the SQLite implementation, SQLite remains the active fallback in the MVP. The `DATABASE_URL` setting is reserved for a future PostgreSQL implementation.
+No database server or account is needed.
 
-### Docker Compose storage
+Back up the data by copying `backend/machinememory.db` while the backend is stopped.
 
-Docker uses named volumes for data that must survive container replacement:
+To reset the database:
 
-| Volume | Container location | Stores |
-|---|---|---|
-| `backend_data` | `/app/data` | SQLite database |
-| `ollama_data` | `/root/.ollama` | Installed Ollama models |
-| `postgres_data` | `/var/lib/postgresql/data` | Optional PostgreSQL database |
-
-`backend_data` is mounted over `/app`, so data is retained when the backend container is rebuilt or recreated. It is not deleted by `docker compose down`.
-
-Remove named data volumes only when the user explicitly wants a clean reset:
-
-```bash
-docker compose down -v
+```powershell
+Remove-Item .\backend\machinememory.db
 ```
 
-This deletes the SQLite, Ollama model, and optional PostgreSQL data volumes.
+Restart FastAPI afterward; it recreates the database and tables.
 
-### PostgreSQL/pgvector-ready mode
+## Prerequisites
 
-The Compose profile starts PostgreSQL with the `pgvector` extension and initializes it with `postgres/init.sql`.
+- Windows 10 or 11
+- Python 3.11 or newer
+- Node.js 20 or newer
+- Ollama for Windows
 
-The credentials and database have documented defaults:
+No cloud account or model API key is required.
 
-- Host from another container: `postgres`
-- Host from the machine: `localhost`
-- Port: `5432`
-- Database: `machinememory`
-- User: `machinememory`
-- Password: `machinememory`
+## Ollama setup
 
-Example persisted vector configuration:
+Start Ollama:
 
-```dotenv
-DATABASE_URL=postgresql://machinememory:machinememory@localhost:5432/machinememory
-POSTGRES_DB=machinememory
-POSTGRES_USER=machinememory
-POSTGRES_PASSWORD=machinememory
+```powershell
+ollama serve
 ```
 
-> The current API implementation reads and writes SQLite. PostgreSQL is included for infrastructure readiness and future migration of embeddings and operational records. Production deployment must implement the PostgreSQL adapter and migration strategy before selecting it as the active data provider.
+Install a model:
 
-## Configuration
-
-Copy the environment template:
-
-```bash
-cp .env.example .env
+```powershell
+ollama pull qwen2.5:1.5b
 ```
 
-On Windows PowerShell:
+Verify it:
+
+```powershell
+ollama list
+```
+
+The project default is `llama3.2`. The currently recommended small Windows test model is `qwen2.5:1.5b`.
+
+Set the model in PowerShell:
+
+```powershell
+$env:OLLAMA_MODEL = "qwen2.5:1.5b"
+```
+
+Or copy `.env.example` and edit it:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
+## Configuration
+
 | Variable | Default | Purpose |
 |---|---|---|
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API base URL |
-| `OLLAMA_MODEL` | `llama3.2` | Ollama model used by all LLM agent calls |
-| `DATABASE_URL` | `sqlite:///./machinememory.db` | Reserved persistence URL |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Browser-facing API URL |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama server |
+| `OLLAMA_MODEL` | `llama3.2` | Ollama model |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Frontend API URL |
 
-No API keys or cloud model credentials are required.
+## Run locally on Windows
 
-## Ollama setup
+Open two PowerShell terminals in the repository directory.
 
-### Native Ollama
+### Terminal 1: Ollama
 
-Install Ollama and start the service:
-
-```bash
+```powershell
 ollama serve
 ```
 
-Pull the default model:
+Keep this terminal open.
 
-```bash
-ollama pull llama3.2
-```
+### Terminal 2: Backend
 
-List and verify installed models:
-
-```bash
-ollama list
-```
-
-To use another model:
-
-```bash
-ollama pull mistral
-```
-
-Set `OLLAMA_MODEL=mistral` in `.env`, and restart the backend.
-
-### Ollama in Docker Compose
-
-Pull the model through the Ollama container:
-
-```bash
-docker compose exec ollama ollama pull llama3.2
-```
-
-## Local development
-
-### 1. Install prerequisites
-
-- Python 3.11 or newer
-- Node.js 20 or newer
-- Ollama
-
-### 2. Start Ollama
-
-```bash
-ollama serve
-```
-
-### 3. Start the backend
-
-```bash
+```powershell
 cd backend
 python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+$env:OLLAMA_BASE_URL = "http://localhost:11434"
+$env:OLLAMA_MODEL = "qwen2.5:1.5b"
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Backend endpoints:
+Backend URLs:
 
-- API health: `http://localhost:8000/api/health`
-- API documentation: `http://localhost:8000/docs`
-- OpenAPI schema: `http://localhost:8000/openapi.json`
+- Health: `http://localhost:8000/api/health`
+- Swagger: `http://localhost:8000/docs`
+- OpenAPI: `http://localhost:8000/openapi.json`
 
-### 4. Start the frontend
+### Terminal 3: Frontend
 
-Open a second terminal in the repository root:
-
-```bash
+```powershell
+$env:NEXT_PUBLIC_API_URL = "http://localhost:8000"
 npm install
 npm run dev
 ```
 
 Open `http://localhost:3000`.
 
-## Docker deployment
+## Native Windows deployment
 
-### Full local stack
+For a Windows PC or on-premises server:
 
-From the repository root:
+1. Install Ollama and the selected model.
+2. Install Python and Node.js.
+3. Copy this repository to the target PC.
+4. Install backend and frontend dependencies.
+5. Start Ollama.
+6. Start FastAPI on port `8000`.
+7. Start Next.js on port `3000`.
+8. Back up `backend/machinememory.db`.
 
-```bash
-docker compose up --build -d
-docker compose exec ollama ollama pull llama3.2
-docker compose logs -f
-```
+For public access, place a reverse proxy such as IIS, Caddy, or Nginx in front of both services and enable HTTPS. Restrict firewall access to approved machines or networks.
 
-Service URLs:
-
-| Service | URL |
-|---|---|
-| Frontend | `http://localhost:3000` |
-| Backend and Swagger | `http://localhost:8000/docs` |
-| Ollama | `http://localhost:11434` |
-
-Stop containers without deleting data:
-
-```bash
-docker compose down
-```
-
-Rebuild after source changes:
-
-```bash
-docker compose up --build -d
-```
-
-### Optional PostgreSQL profile
-
-```bash
-docker compose --profile postgres up --build -d
-docker compose --profile postgres ps
-```
-
-The pgvector image initializes the `vector` extension through `postgres/init.sql`.
-
-### Production deployment checklist
-
-1. Run Ollama on a private or internal network reachable by the backend.
-2. Set `OLLAMA_BASE_URL` to the deployed Ollama service DNS name or URL.
-3. Set a pinned `OLLAMA_MODEL` and run `ollama pull` during image initialization or release provisioning.
-4. Put PostgreSQL behind a private network; do not expose port `5432` publicly.
-5. Replace the SQLite fallback with a PostgreSQL migration and adapter for multi-instance deployments.
-6. Put HTTPS termination in front of Next.js and FastAPI.
-7. Replace wildcard CORS configuration with the deployed frontend origin.
-8. Store database credentials in a secrets manager rather than `.env`.
-9. Back up Ollama model storage and database volumes before upgrades.
-10. Configure log collection and metrics for API latency and agent failures.
-11. Keep human approval out of unattended automation until an authenticated authorization workflow exists.
-
-For a small on-premises deployment, Docker Compose is sufficient. For multiple hosts or high availability, deploy the frontend, backend, PostgreSQL, pgvector, and Ollama to separate container services or Kubernetes resources. Mount durable volumes for Ollama models and PostgreSQL data.
-
-## Human approval boundary
-
-Agents create hypotheses and drafts. They do not approve repair work.
-
-The UI presents safety and compatibility concerns and requires an explicit human action before a run is marked approved. Production deployment should add:
+Production additions:
 
 - Authentication and role-based authorization
 - Approval audit records
-- Technician and approver identity
-- Machine revision and exact submitted evidence
-- Timestamp and signature
-- Retention policy for sensitive maintenance records
+- Database backup schedule
+- TLS/HTTPS
+- Restricted CORS origin
+- Central logs and monitoring
+- Windows Service or Task Scheduler startup entries
 
 ## API
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| `GET` | `/api/health` | Health and provider status |
+| `GET` | `/api/health` | Backend and Ollama provider status |
 | `GET` | `/api/machines` | List machines |
 | `POST` | `/api/machines` | Create a machine |
 | `GET` | `/api/memories` | List repair memories |
@@ -336,14 +242,18 @@ The UI presents safety and compatibility concerns and requires an explicit human
 | `POST` | `/api/memories/{id}/approve` | Approve a stored memory |
 | `GET` | `/api/parts` | List spare-part candidates |
 | `POST` | `/api/parts` | Add a spare-part record |
-| `POST` | `/api/agent-runs` | Route text through all specialist agents |
+| `POST` | `/api/agent-runs` | Route evidence through all agents |
 | `POST` | `/api/agent-runs/{run_id}/approve` | Record explicit human approval |
+
+## Human approval
+
+Agents produce hypotheses and drafts only. They do not authorize repair work.
+
+A run stays unapproved until a qualified person uses the approval action in the UI or calls the approval endpoint. Production deployments should authenticate approvers and retain timestamp, approver identity, machine, evidence, and decision.
 
 ## Tests
 
-Backend tests cover health and manager routing:
-
-```bash
+```powershell
 cd backend
 python -m pip install -r requirements.txt
 python -m pytest -q
@@ -351,6 +261,6 @@ python -m pytest -q
 
 Frontend production build:
 
-```bash
+```powershell
 npm run build
 ```

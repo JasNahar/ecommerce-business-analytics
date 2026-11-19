@@ -1,13 +1,9 @@
 import sqlite3
 from contextlib import contextmanager
-import os
 from pathlib import Path
 
 
-DB_PATH = Path(os.getenv(
-    "MACHINEMEMORY_DB_PATH",
-    str(Path(__file__).resolve().parents[1] / "machinememory.db"),
-))
+DB_PATH = Path(__file__).resolve().parents[1] / "machinememory.db"
 
 
 def connect():
