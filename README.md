@@ -2,7 +2,7 @@
 
 MachineMemory AI is a local-first industrial maintenance knowledge system with a Next.js interface, FastAPI backend, and Ollama inference.
 
-Everything runs directly on the same Windows or development machine. The project does not require Docker, containers, cloud model APIs, API keys, or an external database.
+Everything runs directly on the same Windows or development machine. The project does not require cloud model APIs, API keys, or an external database.
 
 ## Architecture
 
@@ -73,7 +73,7 @@ flowchart TD
 | LLM | Local Ollama |
 | Database | Local SQLite |
 
-No Docker, container runtime, cloud LLM, API key, or external database is required.
+No cloud LLM, API key, or external database is required.
 
 ## Project layout
 
@@ -145,7 +145,7 @@ Verify it:
 ollama list
 ```
 
-The project default is `llama3.2`. The currently recommended small Windows test model is `qwen2.5:1.5b`.
+The project default is `qwen2.5:1.5b`, a small Windows test model. You can use another locally installed model if you prefer.
 
 Set the model in PowerShell:
 
@@ -164,12 +164,12 @@ Copy-Item .env.example .env
 | Variable | Default | Purpose |
 |---|---|---|
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama server |
-| `OLLAMA_MODEL` | `llama3.2` | Ollama model |
+| `OLLAMA_MODEL` | `qwen2.5:1.5b` | Ollama model |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Frontend API URL |
 
 ## Run locally on Windows
 
-Open two PowerShell terminals in the repository directory.
+Open three PowerShell terminals in the repository directory.
 
 ### Terminal 1: Ollama
 
@@ -204,6 +204,17 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
+
+Next.js is usually ready in about 2-5 seconds after `npm run dev` starts. A cold first run or first dependency install can take 1-3 minutes. The displayed `Local: http://localhost:3000` message is the readiness signal.
+
+For repeat startup, use the included scripts instead of entering the full commands:
+
+```powershell
+.\start-backend.ps1
+.\start-frontend.ps1
+```
+
+Run each script in a separate PowerShell terminal.
 
 ## Native Windows deployment
 
