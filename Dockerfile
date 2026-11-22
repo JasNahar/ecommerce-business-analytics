@@ -1,9 +1,10 @@
 FROM node:20-alpine AS frontend
 WORKDIR /app
+ARG BUILD_REVISION=nav-v2-c3a945e
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN NEXT_PUBLIC_API_URL="" npm run build
+RUN echo "${BUILD_REVISION}" > .frontend-build-revision && NEXT_PUBLIC_API_URL="" npm run build
 
 FROM python:3.12-slim
 WORKDIR /app

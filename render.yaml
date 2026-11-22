@@ -3,4 +3,6 @@ services:
     name: meridian-ecommerce-analytics
     runtime: docker
     plan: free
+    branch: jasnahar-ecommerce-analytics-platform
+    autoDeploy: true
     healthCheckPath: /api/health
