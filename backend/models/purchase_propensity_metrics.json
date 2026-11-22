@@ -1,0 +1,9 @@
+{
+  "method": "Temporally split customer features; train cutoff 2025-08-01, test cutoff 2025-10-01",
+  "positive_rate_test": 0.2367,
+  "accuracy": 0.5467,
+  "precision": 0.2471,
+  "recall": 0.4472,
+  "f1": 0.3183,
+  "roc_auc": 0.4969
+}

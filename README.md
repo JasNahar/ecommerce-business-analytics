@@ -1,201 +1,143 @@
-# MachineMemory AI
+# Meridian E-commerce Analytics
 
-MachineMemory AI is a local-first industrial maintenance knowledge system with a Next.js interface, FastAPI backend, and Ollama inference.
+Meridian is a complete, locally runnable e-commerce business intelligence portfolio project. It combines deterministic synthetic sales data, SQLite analytics, a 30-day purchase propensity model, FastAPI endpoints, and a responsive Next.js executive dashboard.
 
-Everything runs directly on the same Windows or development machine. The project does not require cloud model APIs, API keys, or an external database.
+## Business objective
+
+The dashboard helps commerce leaders understand revenue and profitability, compare categories and regions, evaluate channel contribution, identify repeat customers, monitor return risk, and prioritize customers for retention outreach.
+
+The synthetic dataset spans January 2024 through December 2025. It is intentionally fictional and contains no personal or proprietary source data.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    U[Technician] --> FE[Next.js frontend]
-    FE -->|HTTP JSON| API[FastAPI backend]
-    API --> M[Manager and agent router]
-
-    M --> I[Machine identification]
-    M --> T[Technician memory extraction]
-    M --> D[Fault diagnosis]
-    M --> P[Spare-parts discovery]
-    M --> C[Compatibility checking]
-    M --> S[Safety review]
-    M --> K[Knowledge curation]
-
-    I --> O[Local Ollama]
-    T --> O
-    D --> O
-    P --> O
-    S --> O
-    K --> O
-
-    API --> DB[(Local SQLite database)]
-    S --> H{Human approval}
-    H -->|Approved| R[Approved recommendation]
-    H -->|Pending| X[Held for review]
+  G[Deterministic CSV generator] --> V[CSV validation]
+  V --> L[SQLite loader]
+  L --> DB[(ecommerce.db)]
+  DB --> SQL[Analytics views and queries]
+  SQL --> API[FastAPI endpoints]
+  DB --> ML[Temporal feature pipeline]
+  ML --> M[Purchase propensity model]
+  M --> API
+  API --> UI[Next.js dashboard]
+  UI --> U[Executive users]
 ```
+
+## Entity relationship diagram
 
 ```mermaid
-flowchart TD
-    A[Technician enters evidence] --> B[FastAPI receives agent-run request]
-    B --> C[Manager routes specialist work]
-    C --> D[Machine and memory agents]
-    D --> E[Diagnosis and parts agents]
-    E --> F[Compatibility and safety agents]
-    F --> G[Knowledge draft and trace]
-    G --> H{Qualified human approves?}
-    H -->|No| I[No approved repair recommendation]
-    H -->|Yes| J[Approval recorded]
+erDiagram
+  REGIONS ||--o{ CUSTOMERS : contains
+  CHANNELS ||--o{ ORDERS : attributes
+  REGIONS ||--o{ ORDERS : serves
+  CUSTOMERS ||--o{ ORDERS : places
+  ORDERS ||--o{ ORDER_ITEMS : includes
+  PRODUCTS ||--o{ ORDER_ITEMS : sold_as
+  ORDER_ITEMS ||--o{ RETURNS : may_have
 ```
 
-## Features
+## Data product
 
-- Manager/orchestrator agent
-- Machine identification agent
-- Technician-memory extraction agent
-- Fault diagnosis agent
-- Spare-parts discovery agent
-- Compatibility checking agent
-- Safety review agent
-- Knowledge curation agent
-- Agent trace and status display
-- Machine, repair-memory, and spare-parts panels
-- Text entry and text-file upload
-- Explicit human approval gate
-- Local SQLite persistence
-- Ollama-only inference
+Generated CSV files:
 
-## Technology
+- `data/customers.csv`
+- `data/products.csv`
+- `data/channels.csv`
+- `data/regions.csv`
+- `data/orders.csv`
+- `data/order_items.csv`
+- `data/returns.csv`
 
-| Layer | Technology |
-|---|---|
-| Frontend | Next.js, React, TypeScript, Tailwind CSS |
-| Backend | Python, FastAPI, Pydantic |
-| Agents | Python router and specialist classes |
-| LLM | Local Ollama |
-| Database | Local SQLite |
-
-No cloud LLM, API key, or external database is required.
-
-## Project layout
-
-```text
-src/app/page.tsx          Next.js maintenance workspace
-backend/app/main.py       FastAPI API and startup
-backend/app/orchestrator.py
-                          Agent manager/router
-backend/app/agents.py     Specialist agents
-backend/app/ollama.py     Local Ollama HTTP client
-backend/app/db.py         SQLite connection and schema
-backend/app/schemas.py    Typed API models
-backend/tests/            Health and router tests
-.env.example              Local environment template
-```
-
-## Database storage
-
-The native SQLite database is stored at:
-
-```text
-backend/machinememory.db
-```
-
-It is created automatically when FastAPI starts. Tables are:
-
-- `machines`
-- `memories`
-- `parts`
-
-No database server or account is needed.
-
-Back up the data by copying `backend/machinememory.db` while the backend is stopped.
-
-To reset the database:
+Refresh the complete data product and SQLite database:
 
 ```powershell
-Remove-Item .\backend\machinememory.db
+.\refresh-data.ps1
 ```
 
-Restart FastAPI afterward; it recreates the database and tables.
+Equivalent cross-platform commands:
 
-## Prerequisites
+```powershell
+python scripts/generate_ecommerce_data.py
+python scripts/validate_data.py
+python scripts/load_sqlite.py
+```
 
-- Windows 10 or 11
+The generator is seeded with `SEED = 2024`, so refreshes reproduce the same data.
+
+## Data dictionary
+
+| Table | Key fields | Description |
+|---|---|---|
+| `customers` | `customer_id`, `region_id` | Customer profile, loyalty status, signup date, and cohort |
+| `products` | `product_id`, `sku`, `category` | Product catalog, list price, cost, and active status |
+| `channels` | `channel_id`, `channel_name` | Acquisition and transaction channel |
+| `regions` | `region_id`, `region_name`, `country` | Customer and order market |
+| `orders` | `order_id`, `customer_id`, `channel_id`, `region_id`, `ordered_at` | Order header, status, gross revenue, and discount |
+| `order_items` | `order_item_id`, `order_id`, `product_id`, `quantity` | Item-level revenue and cost |
+| `returns` | `return_id`, `order_item_id`, `refund_amount` | Returned quantity, refund, reason, and date |
+
+## SQL methodology
+
+`sql/schema.sql` defines the normalized SQLite/PostgreSQL-compatible schema, foreign keys, checks, and indexes. `sql/views.sql` provides monthly performance, category, channel, and RFM views. `sql/analysis.sql` contains named revenue, profit, AOV, repeat purchase, regional/category, channel, and return analyses.
+
+Metric definitions:
+
+- Revenue: completed order item net revenue after discounts.
+- Profit: net revenue minus item cost.
+- AOV: net revenue divided by completed distinct orders.
+- Repeat purchase rate: customers with more than one completed order divided by customers with at least one.
+- Return rate: distinct returned order items divided by distinct sold order items.
+- RFM: 5-bucket recency, frequency, and monetary scoring with an RFM segment label.
+
+## Machine learning
+
+The model predicts whether a customer makes at least one completed purchase in the next 30 days.
+
+The temporal method uses 2025-08-01 as a feature cutoff and 30-day purchase labels, then evaluates against a held-out 2025-10-01 cutoff. Features include loyalty status, cohort, region, historical orders, category breadth, monetary value, refund value, and recency.
+
+Train the model:
+
+```powershell
+python ml/train.py
+```
+
+The saved artifacts are:
+
+- `backend/models/purchase_propensity.joblib`
+- `backend/models/purchase_propensity_metrics.json`
+- `backend/models/feature_importance.json`
+
+Run CLI inference:
+
+```powershell
+python ml/predict.py --loyalty-member 1 --segment-cohort Loyal --region-name "North America" --order-count 6 --category-count 3 --monetary 1840 --refund-amount 24 --recency-days 18
+```
+
+The pipeline is logistic regression with median imputation, standard scaling, one-hot categorical encoding, and balanced class weights. The metrics JSON records test accuracy, precision, recall, F1, and ROC-AUC. Coefficient magnitudes provide practical feature importance.
+
+## Dashboard
+
+The dashboard includes executive KPIs, monthly revenue trends, category margin and revenue performance, channel attribution, regional performance, RFM customer ranking, filters, and an interactive 30-day propensity score.
+
+## Run locally
+
+Prerequisites:
+
 - Python 3.11 or newer
 - Node.js 20 or newer
-- Ollama for Windows
 
-No cloud account or model API key is required.
-
-## Ollama setup
-
-Start Ollama:
+Backend:
 
 ```powershell
-ollama serve
-```
-
-Install a model:
-
-```powershell
-ollama pull qwen2.5:1.5b
-```
-
-Verify it:
-
-```powershell
-ollama list
-```
-
-The project default is `qwen2.5:1.5b`, a small Windows test model. You can use another locally installed model if you prefer.
-
-Set the model in PowerShell:
-
-```powershell
-$env:OLLAMA_MODEL = "qwen2.5:1.5b"
-```
-
-Or copy `.env.example` and edit it:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-## Configuration
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Local Ollama server |
-| `OLLAMA_MODEL` | `qwen2.5:1.5b` | Ollama model |
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Frontend API URL |
-
-## Run locally on Windows
-
-Open three PowerShell terminals in the repository directory.
-
-### Terminal 1: Ollama
-
-```powershell
-ollama serve
-```
-
-Keep this terminal open.
-
-### Terminal 2: Backend
-
-```powershell
+python scripts/load_sqlite.py
+python ml/train.py
 cd backend
 python -m pip install -r requirements.txt
-$env:OLLAMA_BASE_URL = "http://localhost:11434"
-$env:OLLAMA_MODEL = "qwen2.5:1.5b"
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Backend URLs:
-
-- Health: `http://localhost:8000/api/health`
-- Swagger: `http://localhost:8000/docs`
-- OpenAPI: `http://localhost:8000/openapi.json`
-
-### Terminal 3: Frontend
+Frontend:
 
 ```powershell
 $env:NEXT_PUBLIC_API_URL = "http://localhost:8000"
@@ -205,73 +147,53 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-Next.js is usually ready in about 2-5 seconds after `npm run dev` starts. A cold first run or first dependency install can take 1-3 minutes. The displayed `Local: http://localhost:3000` message is the readiness signal.
+API documentation is at `http://localhost:8000/docs`. Health is at `http://localhost:8000/api/health`.
 
-For repeat startup, use the included scripts instead of entering the full commands:
+Repeat startup scripts are also provided:
 
 ```powershell
 .\start-backend.ps1
 .\start-frontend.ps1
 ```
 
-Run each script in a separate PowerShell terminal.
+## Docker
 
-## Native Windows deployment
+Build and run the combined frontend and API image:
 
-For a Windows PC or on-premises server:
+```powershell
+docker build -t meridian-analytics .
+docker run --rm -p 8000:8000 meridian-analytics
+```
 
-1. Install Ollama and the selected model.
-2. Install Python and Node.js.
-3. Copy this repository to the target PC.
-4. Install backend and frontend dependencies.
-5. Start Ollama.
-6. Start FastAPI on port `8000`.
-7. Start Next.js on port `3000`.
-8. Back up `backend/machinememory.db`.
+Open `http://localhost:8000`.
 
-For public access, place a reverse proxy such as IIS, Caddy, or Nginx in front of both services and enable HTTPS. Restrict firewall access to approved machines or networks.
+## Deploy
 
-Production additions:
+The repository includes `render.yaml` for a free-tier Docker web service on Render. Create a new Render Blueprint from this repository, select the Blueprint, and deploy. Render sets the public HTTPS endpoint automatically. No paid database or API secret is required.
 
-- Authentication and role-based authorization
-- Approval audit records
-- Database backup schedule
-- TLS/HTTPS
-- Restricted CORS origin
-- Central logs and monitoring
-- Windows Service or Task Scheduler startup entries
+The container exposes port `8000` and defines `/api/health` as the health check.
 
-## API
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `GET` | `/api/health` | Backend and Ollama provider status |
-| `GET` | `/api/machines` | List machines |
-| `POST` | `/api/machines` | Create a machine |
-| `GET` | `/api/memories` | List repair memories |
-| `POST` | `/api/memories` | Save a memory draft |
-| `POST` | `/api/memories/{id}/approve` | Approve a stored memory |
-| `GET` | `/api/parts` | List spare-part candidates |
-| `POST` | `/api/parts` | Add a spare-part record |
-| `POST` | `/api/agent-runs` | Route evidence through all agents |
-| `POST` | `/api/agent-runs/{run_id}/approve` | Record explicit human approval |
-
-## Human approval
-
-Agents produce hypotheses and drafts only. They do not authorize repair work.
-
-A run stays unapproved until a qualified person uses the approval action in the UI or calls the approval endpoint. Production deployments should authenticate approvers and retain timestamp, approver identity, machine, evidence, and decision.
+Other Docker hosts can use the same `Dockerfile`.
 
 ## Tests
 
+Run focused backend tests:
+
 ```powershell
-cd backend
-python -m pip install -r requirements.txt
-python -m pytest -q
+python scripts/load_sqlite.py
+python ml/train.py
+python -m pytest -q backend/tests
 ```
 
-Frontend production build:
+Build the frontend:
 
 ```powershell
+npm ci
 npm run build
 ```
+
+GitHub Actions runs data generation, validation, SQLite loading, ML training, pytest, and the Next.js production build.
+
+## Production considerations
+
+This portfolio app does not include authentication or secrets. For production use, add identity and role-based access, an external managed database, encrypted transport, database backups, centralized logs, cache controls, and rate limiting. Prediction results should support—not replace—customer decision governance.

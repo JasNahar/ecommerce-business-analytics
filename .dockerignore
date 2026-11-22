@@ -1,0 +1,9 @@
+.git
+.gitignore
+.env
+.env.local
+.next
+node_modules
+__pycache__
+*.py[cod]
+.pytest_cache

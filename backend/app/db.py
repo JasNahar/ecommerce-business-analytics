@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 
-DB_PATH = Path(__file__).resolve().parents[1] / "machinememory.db"
+DB_PATH = Path(__file__).resolve().parents[1] / "ecommerce.db"
 
 
 def connect():
@@ -13,39 +13,9 @@ def connect():
 
 
 def init_db():
-    with connect() as conn:
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS machines (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                location TEXT NOT NULL,
-                manufacturer TEXT DEFAULT '',
-                model TEXT DEFAULT '',
-                serial_number TEXT DEFAULT '',
-                status TEXT DEFAULT 'Stable',
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS memories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                machine_id INTEGER,
-                machine_name TEXT DEFAULT '',
-                technician TEXT DEFAULT '',
-                text TEXT NOT NULL,
-                source TEXT DEFAULT 'technician',
-                approved INTEGER DEFAULT 0,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS parts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                machine_id INTEGER,
-                original_part TEXT NOT NULL,
-                substitute_part TEXT NOT NULL,
-                match_confidence INTEGER DEFAULT 0,
-                notes TEXT DEFAULT '',
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            );
-            """
+    if not DB_PATH.exists():
+        raise RuntimeError(
+            f"{DB_PATH.name} is missing. Run python scripts/load_sqlite.py before starting the API."
         )
 
 

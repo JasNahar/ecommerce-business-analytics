@@ -1,0 +1,6 @@
+channel_id,channel_name,channel_type
+1,Website,Owned
+2,Mobile App,Owned
+3,Marketplace,Third-party
+4,Social,Third-party
+5,Retail,Third-party
