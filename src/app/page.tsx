@@ -23,12 +23,11 @@ type Rfm = { customer_id: number; name: string; segment_cohort: string; monetary
 const money = (value: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value || 0);
 
-function Icon({ name }: { name: "grid" | "chart" | "users" | "search" | "download" | "spark" }) {
+function Icon({ name }: { name: "grid" | "chart" | "users" | "download" | "spark" }) {
   const paths = {
     grid: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>,
     chart: <><path d="M3 20V10M8 20V4M13 20v-7M18 20V7M21 20H1"/></>,
     users: <><circle cx="9" cy="8" r="3"/><path d="M3 20c.5-4 3-6 6-6s5.5 2 6 6M16 5c2.2.2 3.5 1.8 3.5 3.5S18.2 12 16 12"/></>,
-    search: <><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></>,
     download: <><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></>,
     spark: <><path d="M12 2l1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7L12 2z"/></>,
   };
@@ -73,6 +72,18 @@ export default function Home() {
   const [dateTo, setDateTo] = useState("");
   const [health, setHealth] = useState("Checking");
   const [prediction, setPrediction] = useState<{ probability: number; likely: boolean } | null>(null);
+  const [activeNav, setActiveNav] = useState("Executive overview");
+
+  function navigateTo(label: "Executive overview" | "Performance" | "Customers" | "Propensity", targetId: string) {
+    setActiveNav(label);
+    const target = targetId === "executive-overview"
+      ? document.querySelector("main")
+      : document.getElementById(targetId);
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (target instanceof HTMLElement) {
+      target.focus({ preventScroll: true });
+    }
+  }
 
   useEffect(() => {
     fetch(`${API}/api/filters`).then((r) => r.json()).then(setFilters).catch(() => {});
@@ -128,25 +139,24 @@ export default function Home() {
       <aside className="sidebar">
         <div className="brand"><span><Icon name="chart"/></span><div><strong>Meridian</strong><small>Commerce analytics</small></div></div>
         <nav>
-          <a className="active"><Icon name="grid"/><span>Executive overview</span></a>
-          <a><Icon name="chart"/><span>Performance</span></a>
-          <a><Icon name="users"/><span>Customers</span></a>
-          <a><Icon name="spark"/><span>Propensity</span></a>
+          <button type="button" className={activeNav === "Executive overview" ? "active" : ""} onClick={() => navigateTo("Executive overview", "executive-overview")}><Icon name="grid"/><span>Executive overview</span></button>
+          <button type="button" className={activeNav === "Performance" ? "active" : ""} onClick={() => navigateTo("Performance", "performance")}><Icon name="chart"/><span>Performance</span></button>
+          <button type="button" className={activeNav === "Customers" ? "active" : ""} onClick={() => navigateTo("Customers", "customers")}><Icon name="users"/><span>Customers</span></button>
+          <button type="button" className={activeNav === "Propensity" ? "active" : ""} onClick={() => navigateTo("Propensity", "propensity")}><Icon name="spark"/><span>Propensity</span></button>
         </nav>
         <div className="sidebar-status"><i/><div><strong>{health}</strong><small>SQLite analytics live</small></div></div>
       </aside>
 
-      <main>
+      <main id="executive-overview" tabIndex={-1}>
         <header className="topbar">
-          <div><p>Analytics workspace</p><h1>Executive overview</h1></div>
+          <div><p>Analytics workspace</p><h1>{activeNav}</h1></div>
           <div className="top-actions">
-            <button className="search-button" aria-label="Search"><Icon name="search"/></button>
             <button className="export-button" onClick={() => window.print()}><Icon name="download"/> Export</button>
             <span className="avatar">JS</span>
           </div>
         </header>
 
-        <div className="content">
+        <div className="content" id="executive-overview" tabIndex={-1}>
           <section className="filter-row">
             <div><span>Performance period</span><strong>Jan 2024 - Dec 2025</strong></div>
             <label>Region<select value={region} onChange={(e) => setRegion(e.target.value)}><option value="">All regions</option>{filters?.regions.map((x) => <option key={x}>{x}</option>)}</select></label>
@@ -162,7 +172,7 @@ export default function Home() {
             <article><span>Repeat purchase</span><strong>{summary?.repeat_purchase_rate?.toFixed(1) || "0.0"}%</strong><small>{summary?.customers?.toLocaleString() || 0} active customers</small></article>
           </section>
 
-          <section className="dashboard-grid">
+          <section className="dashboard-grid" id="performance" tabIndex={-1}>
             <article className="panel trend-panel">
               <div className="panel-head"><div><span>Revenue trend</span><h2>Monthly performance</h2></div><div className="legend"><i/>Net revenue</div></div>
               <TrendChart data={trends}/>
@@ -194,14 +204,14 @@ export default function Home() {
                 <div className="region-row" key={item.region_name}><span>{item.region_name}</span><strong>{money(item.revenue)}</strong><small>{item.customers} customers</small></div>
               ))}
             </article>
-            <article className="panel prediction-panel">
+            <article className="panel prediction-panel" id="propensity" tabIndex={-1}>
               <div className="panel-head"><div><span>Machine learning</span><h2>30-day propensity</h2></div></div>
               <div className="prediction-copy"><span className="prediction-orb"><Icon name="spark"/></span><div><strong>{prediction ? `${(prediction.probability * 100).toFixed(1)}%` : "Ready"}</strong><small>{prediction ? (prediction.likely ? "Likely to purchase" : "Low intent") : "Run sample customer score"}</small></div></div>
               <button onClick={runPrediction}>Run prediction</button>
             </article>
           </section>
 
-          <section className="panel rfm-panel">
+          <section className="panel rfm-panel" id="customers" tabIndex={-1}>
             <div className="panel-head"><div><span>Customer intelligence</span><h2>Top RFM customers</h2></div><button className="text-button">View all customers</button></div>
             <div className="table-wrap"><table><thead><tr><th>Customer</th><th>Cohort</th><th>Orders</th><th>Recency</th><th>Lifetime value</th><th>Priority</th></tr></thead><tbody>
               {rfm.map((item) => <tr key={item.customer_id}><td><strong>{item.name}</strong><small>C-{item.customer_id.toString().padStart(4,"0")}</small></td><td>{item.segment_cohort}</td><td>{item.frequency}</td><td>{item.recency} days</td><td>{money(item.monetary)}</td><td><span className="priority">{item.frequency > 8 ? "High" : "Standard"}</span></td></tr>)}
