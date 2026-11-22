@@ -2,11 +2,9 @@
 
 Meridian is a complete, locally runnable e-commerce business intelligence portfolio project. It combines deterministic synthetic sales data, SQLite analytics, a 30-day purchase propensity model, FastAPI endpoints, and a responsive Next.js executive dashboard.
 
-**Live demo:** https://meridian-ecommerce-analytics.onrender.com
-
 ## Live Demo
 
-Open the deployed analytics dashboard at [meridian-ecommerce-analytics.onrender.com](https://meridian-ecommerce-analytics.onrender.com).
+Open the deployed analytics dashboard: [Live demo](https://ecommerce-business-analytics-1.onrender.com).
 
 ## Business objective
 
